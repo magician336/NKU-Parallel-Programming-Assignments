@@ -1,0 +1,8 @@
+﻿.venv/
+ann_backup/
+*.exe
+*.o
+*.s
+benchmark*
+asm_test*
+
