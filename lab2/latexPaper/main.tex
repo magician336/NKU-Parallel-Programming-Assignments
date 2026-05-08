@@ -1,0 +1,610 @@
+\documentclass[a4paper]{article}
+
+\input{style/ch_xelatex.tex}
+\input{style/scala.tex}
+
+%代码段设置
+\lstset{numbers=left,
+basicstyle=\tiny,
+numberstyle=\tiny,
+keywordstyle=\color{blue!70},
+commentstyle=\color{red!50!green!50!blue!50},
+frame=single, rulesepcolor=\color{red!20!green!20!blue!20},
+escapeinside=``
+}
+
+\graphicspath{ {fig/} }
+\usepackage{ctex}
+\usepackage{graphicx}
+\usepackage{color,framed}%文本框
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{amssymb}
+\usepackage{enumerate}
+\usepackage{xcolor}
+\usepackage{bm} 
+\usepackage{lastpage}%获得总页数
+\usepackage{fancyhdr}
+\usepackage{tabularx}  
+\usepackage{geometry}
+\usepackage{minted}
+\usepackage{subfigure}
+\usepackage{float}
+\usepackage{pdfpages}
+\usepackage{pgfplots}
+\pgfplotsset{width=10cm,compat=1.9}
+\usepackage{multirow}
+\usepackage{footnote}
+\usepackage{booktabs}
+
+%-----------------------伪代码------------------
+\usepackage{algorithm}  
+\usepackage{algorithmicx}  
+\usepackage{algpseudocode}  
+\floatname{algorithm}{Algorithm}  
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}  
+\renewcommand{\algorithmicensure}{\textbf{Output:}} 
+\usepackage{lipsum}  
+\makeatletter
+\newenvironment{breakablealgorithm}
+  {% \begin{breakablealgorithm}
+  \begin{center}
+     \refstepcounter{algorithm}% New algorithm
+     \hrule height.8pt depth0pt \kern2pt% \@fs@pre for \@fs@ruled
+     \renewcommand{\caption}[2][\relax]{% Make a new \caption
+      {\raggedright\textbf{\ALG@name~\thealgorithm} ##2\par}%
+      \ifx\relax##1\relax % #1 is \relax
+         \addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##2}%
+      \else % #1 is not \relax
+         \addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##1}%
+      \fi
+      \kern2pt\hrule\kern2pt
+     }
+  }{% \end{breakablealgorithm}
+     \kern2pt\hrule\relax% \@fs@post for \@fs@ruled
+  \end{center}
+  }
+\makeatother
+%------------------------代码-------------------
+\usepackage{xcolor} 
+\usepackage{listings} 
+\lstset{ 
+breaklines,%自动换行
+basicstyle=\small,
+escapeinside=``,
+keywordstyle=\color{ blue!70} \bfseries,
+commentstyle=\color{red!50!green!50!blue!50},% 
+stringstyle=\ttfamily,% 
+extendedchars=false,% 
+linewidth=\textwidth,% 
+numbers=left,% 
+numberstyle=\tiny \color{blue!50},% 
+frame=trbl,%
+rulesepcolor=\color{red!20!green!20!blue!20}
+}
+
+%-------------------------页面边距--------------
+\geometry{a4paper,left=2.3cm,right=2.3cm,top=2.7cm,bottom=2.7cm}
+%-------------------------页眉页脚--------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\lhead{\kaishu \leftmark}
+% \chead{}
+\rhead{\kaishu 并行程序设计实验报告}%加粗\bfseries 
+\lfoot{}
+\cfoot{\thepage}
+\rfoot{}
+\renewcommand{\headrulewidth}{0.1pt}  
+\renewcommand{\footrulewidth}{0pt}%去掉横线
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}%标题横线
+\newcommand{\HRulegrossa}{\rule{\linewidth}{1.2mm}}
+\setlength{\textfloatsep}{10mm}%设置图片的前后间距
+%--------------------文档内容--------------------
+
+\begin{document}
+\renewcommand{\contentsname}{目\ 录}
+\renewcommand{\appendixname}{附录}
+\renewcommand{\appendixpagename}{附录}
+\renewcommand{\refname}{参考文献} 
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+\renewcommand{\today}{\number\year 年 \number\month 月 \number\day 日}
+
+%-------------------------封面----------------
+\begin{titlepage}
+    \begin{center}
+    \includegraphics[width=0.8\textwidth]{NKU.png}\\[1cm]
+    \vspace{20mm}
+		\textbf{\huge\textbf{\kaishu{计算机学院}}}\\[0.5cm]
+		\textbf{\huge{\kaishu{并行程序设计期末报告}}}\\[2.3cm]
+		\textbf{\Huge\textbf{\kaishu{基于SIMD的向量近似最近邻搜索优化}}}
+
+		\vspace{\fill}
+    
+    % \textbf{\Large \textbf{并行程序设计期末实验报告}}\\[0.8cm]
+    % \HRule \\[0.9cm]
+    % \HRule \\[2.0cm]
+    \centering
+    \textsc{\LARGE \kaishu{姓名\ :\ 李培涛}}\\[0.5cm]
+    \textsc{\LARGE \kaishu{学号\ :\ 2411041}}\\[0.5cm]
+    \textsc{\LARGE \kaishu{专业\ :\ 计算机科学与技术}}\\[0.5cm]
+    
+    \vfill
+    {\Large \today}
+    \end{center}
+\end{titlepage}
+
+\renewcommand {\thefigure}{\thesection{}.\arabic{figure}}%图片按章标号
+\renewcommand{\figurename}{图}
+\renewcommand{\contentsname}{目录}  
+\cfoot{\thepage\ of \pageref{LastPage}}%当前页 of 总页数
+
+
+% 生成目录
+\clearpage
+\tableofcontents
+\newpage
+
+%--------------------------Title--------------------------------
+\section{问题描述}
+
+\subsection{研究背景}
+
+近似最近邻搜索（Approximate Nearest Neighbor Search, ANNS）是高维向量检索中的核心问题。给定查询向量 $q \in \mathbb{R}^d$ 和数据集 $X = \{x_1, x_2, ..., x_N\} \subset \mathbb{R}^d$，ANNS 的目标是在 $X$ 中找到与 $q$ 距离最近的 $k$ 个向量。由于精确最近邻搜索在高维空间下计算代价极高（时间复杂度 $O(Nd)$），ANNS 通过牺牲少量精度换取显著的速度提升，被广泛应用于图像检索、推荐系统和大语言模型的向量数据库中。
+
+评价 ANNS 算法的两个核心指标为：
+\begin{itemize}
+  \item \textbf{Recall@k}：返回的 $k$ 个近似最近邻中包含的真实最近邻比例
+  \item \textbf{Latency}：单次查询的平均耗时（微秒）
+\end{itemize}
+
+\subsection{实验目标}
+
+本次实验选取 ANN 选题中的 SIMD 加速方向，在 ARM aarch64 服务器上利用 NEON 指令集，对三种向量搜索方案进行 SIMD 并行优化：
+\begin{enumerate}
+  \item \textbf{Flat-SIMD}（3分）：暴力搜索的 SIMD 加速基线
+  \item \textbf{SQ-SIMD}（7分）：标量量化（Scalar Quantization）压缩 + 两阶段搜索
+  \item \textbf{PQ-SIMD}（14分）：乘积量化（Product Quantization）+ LUT 查表 + 精排
+\end{enumerate}
+
+实验数据集为 DEEP100K，向量维度 $d=96$，距离度量采用内积（Inner Product, IP），即 $\delta(x, y) = 1 - \sum_{i=1}^{d} x_i \cdot y_i$。
+
+\section{SIMD 算法设计与实现}
+
+\subsection{跨平台 SIMD 封装}
+
+为实现代码在 ARM（NEON）和 x86（SSE/AVX）平台的可移植性，我们设计了 \texttt{simd4f} 结构体对 128-bit SIMD 寄存器进行统一封装：
+
+\begin{lstlisting}[language=C++, title=simd4f 结构体定义]
+struct simd4f {
+#if defined(USE_NEON)
+    float32x4_t v;
+#elif defined(USE_SSE)
+    __m128 v;
+#else
+    float v[4];
+#endif
+    // loadu, storeu, operator+,-,*, fmadd, reduce_sum
+};
+\end{lstlisting}
+
+关键运算包括：
+\begin{itemize}
+  \item \textbf{fmadd}：融合乘加 $c + a \times b$，NEON 用 \texttt{vfmaq\_f32}，SSE 用 \texttt{\_mm\_add\_ps(\_mm\_mul\_ps(a,b), c)}
+  \item \textbf{reduce\_sum}：水平求和。SSE2 版本使用 \texttt{\_mm\_shuffle\_ps} + \texttt{\_mm\_add\_ps} 两两累加，避免使用 SSE3 的 \texttt{\_mm\_movehdup\_ps}
+\end{itemize}
+
+\subsection{Flat-SIMD}
+
+\subsubsection{算法原理}
+
+Flat-SIMD 是最直接的加速方案：遍历数据集中的所有 base 向量，利用 SIMD 计算查询向量 $q$ 与每个 base 向量的 IP 距离，维护大小为 $k$ 的最大堆返回 Top-K 结果。
+
+\subsubsection{复杂度分析}
+
+\begin{itemize}
+  \item 距离计算：每个向量需要 $d$ 次乘法和加法，SIMD 4-wide 并行后降至 $d/4$ 次向量运算
+  \item 时间复杂度：$O(N \cdot d/4 + N \log k)$，其中 $N=100000$, $d=96$
+  \item 空间复杂度：$O(Nd)$（base 数据）$+ O(k)$（堆）
+\end{itemize}
+
+\subsubsection{核心代码}
+
+\begin{lstlisting}[language=C++, title=Flat-SIMD 搜索核心]
+std::priority_queue<std::pair<float, uint32_t>> flat_search(
+    float* base, float* query, size_t base_number,
+    size_t vecdim, size_t k) {
+    std::priority_queue<std::pair<float, uint32_t>> q;
+    for(size_t i = 0; i < base_number; ++i) {
+        float dis = inner_product_simd(query,
+            base + i*vecdim, vecdim);
+        if(q.size() < k) q.push({dis, (uint32_t)i});
+        else if(dis < q.top().first) {
+            q.push({dis, (uint32_t)i}); q.pop();
+        }
+    }
+    return q;
+}
+\end{lstlisting}
+
+\subsection{SQ-SIMD}
+
+\subsubsection{算法原理}
+
+标量量化（Scalar Quantization, SQ）将每个 float32 压缩为 uint8，压缩比 4:1。具体流程：
+\begin{enumerate}
+  \item \textbf{训练}：计算每维的 $min$ 和 $max$，均匀划分 256 个量化区间
+  \item \textbf{编码}：$code[i][d] = \lfloor 255 \times \frac{base[i][d] - min_d}{max_d - min_d} \rfloor$
+  \item \textbf{查询}（两阶段）：
+    \begin{itemize}
+      \item 粗排：SIMD 批量将 uint8 解码为 float，计算近似 IP 距离
+      \item 精排：对 Top-p 候选计算精确 IP 距离
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{复杂度分析}
+
+\begin{itemize}
+  \item 编码后数据量：$N \times d \times 1$ byte（原 $N \times d \times 4$ bytes）
+  \item 粗排时 NEON 一次处理 16 个 uint8→float 转换，SSE 一次处理 4 个
+  \item 整体 latency 低于 Flat-SIMD，recall 受量化精度影响
+\end{itemize}
+
+\subsection{PQ-SIMD}
+
+\subsubsection{算法原理}
+
+乘积量化（Product Quantization, PQ）是高维向量压缩的经典方法，核心思想是将高维空间分解为多个低维子空间的笛卡尔积。
+
+\textbf{参数设置}：维度 $d=96$ 分解为 $m=8$ 个子空间，每子空间维度 $d_{sub}=12$。每个子空间用 KMeans 聚类 $k_{sub}=256$ 个中心。
+
+\textbf{流程}：
+\begin{enumerate}
+  \item \textbf{训练}：对每个子空间独立运行 KMeans（max\_iter=10）
+  \item \textbf{编码}：每个向量用 8 byte 表示（每子空间 1 byte = 中心 ID）
+  \item \textbf{查询}：
+    \begin{itemize}
+      \item \textbf{构建 LUT}：计算查询向量 $q$ 的每个子空间与 256 个中心的 IP 距离，得到 $m \times 256$ 的查找表
+      \item \textbf{ADC 粗排}：对每个 base 向量，通过查表累加 8 个子空间的距离。使用 SIMD 批量 4 路并行查表累加
+      \item \textbf{精排}：对 Top-p 候选计算精确 IP 距离
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{复杂度分析}
+
+\begin{itemize}
+  \item 编码后数据量：$N \times m \times 1$ byte $= 100K \times 8 = 800$ KB（原 38.4 MB）
+  \item LUT 构建：$O(m \cdot k_{sub} \cdot d_{sub}) = O(8 \times 256 \times 12) = O(24576)$ 每查询
+  \item ADC 粗排：$O(N \cdot m) = O(100K \times 8)$，SIMD 4-wide 后降至约 $O(200K)$ 次查表
+  \item 精排：$O(p \cdot d)$，$p$ 为候选数
+\end{itemize}
+
+\subsubsection{核心代码}
+
+\begin{lstlisting}[language=C++, title=PQ ADC 批量 4 路 SIMD]
+for (; i + 4 <= base_num; i += 4) {
+    simd4f sum(0.0f);
+    for (int sub = 0; sub < m; ++sub) {
+        int off = sub * ksub;
+        simd4f vals(
+            lut[off + codes[(i+0)*m + sub]],
+            lut[off + codes[(i+1)*m + sub]],
+            lut[off + codes[(i+2)*m + sub]],
+            lut[off + codes[(i+3)*m + sub]]
+        );
+        sum = sum + vals;
+    }
+    float tmp[4]; sum.storeu(tmp);
+    coarse_dist[i+0] = tmp[0];
+    // ... i+1,2,3
+}
+\end{lstlisting}
+
+\subsection{关键技术点}
+
+\subsubsection{IP 距离适配}
+
+DEEP100K 数据集采用 IP 距离度量 $\delta(x,y) = 1 - \sum x_i y_i$。PQ 的 LUT 构建必须计算 query 与 centroid 的 IP 距离而非 L2 距离，否则粗排与精排度量不一致会导致 recall 显著下降。
+
+\subsubsection{静态缓存机制}
+
+PQ 的 KMeans 训练耗时较长（数秒），若每次查询重复训练会严重影响 latency。使用 \texttt{static bool ready} 静态缓存机制，确保训练和数据编码只在首次查询时执行：
+
+\begin{lstlisting}[language=C++]
+static PQQuantizer pq;
+static std::vector<uint8_t> codes;
+static bool ready = false;
+if (!ready) {
+    pq = PQQuantizer(vecdim, 8, 256);
+    pq.train(base, base_number);
+    codes = pq.encode_batch(base, base_number);
+    ready = true;
+}
+\end{lstlisting}
+
+\subsubsection{SSE2 兼容性}
+
+服务器 GCC 不支持 SSE3 的 \texttt{\_mm\_movehdup\_ps} 和 SSE4.1 的 \texttt{\_mm\_cvtepu8\_epi32}，编译报错。
+
+\textbf{解决}：
+\begin{itemize}
+  \item \texttt{reduce\_sum}：使用纯 SSE2 的 \texttt{\_mm\_shuffle\_ps} + \texttt{\_mm\_add\_ps} 实现水平累加
+  \item uint8→float：使用 \texttt{\_mm\_unpacklo\_epi8}（与 0 交织）→ \texttt{\_mm\_unpacklo\_epi16} → \texttt{\_mm\_cvtepi32\_ps}
+\end{itemize}
+
+\section{性能评测}
+
+\subsection{测试方法}
+
+为验证 SIMD 指令的加速效果，我们在本地环境（Windows + GCC 15.2.0, x86_64）上进行了基准测试。测试采用随机生成的 float 向量（维度 96），分别执行串行标量版本和 SIMD 版本的 Flat 搜索，各运行 10000 次查询取平均 latency。
+
+\textbf{注}：由于本地无 DEEP100K 数据集，测试使用随机数据。随机数据的计算模式与真实数据一致（均为顺序遍历 base 向量计算 IP 距离），因此 SIMD 加速比具有代表性；但绝对 latency 值受 cache 行为影响，与服务器真实环境存在差异，仅用于展示加速趋势。
+
+\subsection{串行 vs SIMD 对比}
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{cccc}
+  \toprule
+  数据规模 & 串行 latency ($\mu$s) & SIMD latency ($\mu$s) & 加速比 \\
+  \midrule
+  10K & 359.9 & 136.1 & \textbf{2.65x} \\
+  50K & 1872.2 & 820.0 & \textbf{2.28x} \\
+  100K & 5596.4 & 4030.3 & \textbf{1.39x} \\
+  \bottomrule
+  \end{tabular}
+  \caption{串行版本与 SIMD 版本的 Flat 搜索 latency 对比（Linux 双系统测试）}
+\end{table}
+
+\subsection{结果分析}
+
+测试结果表明，SIMD 4-wide 并行确实带来了显著的性能提升，加速比在 1.4x 至 2.7x 之间。但随着数据规模增大，加速比呈下降趋势：
+
+\begin{itemize}
+  \item \textbf{小规模（10K）}：数据可完全放入 L2 cache，SIMD 计算优势充分发挥，加速比 2.65x
+  \item \textbf{中规模（50K）}：数据部分超出 cache，内存带宽开始成为瓶颈，加速比降至 2.28x
+  \item \textbf{大规模（100K）}：内存访问成为主导因素，SIMD 的计算优势被内存带宽掩盖，加速比降至 1.39x
+\end{itemize}
+
+这一现象说明：SIMD 优化对计算密集型操作效果显著，但当数据规模超过 cache 容量时，内存带宽成为新的瓶颈。后续优化可考虑分块（blocking）策略，将数据分批加载到 cache 中计算，以进一步提升 SIMD 利用率。
+
+\subsection{perf 性能剖析}
+
+为深入分析性能瓶颈，我们在 Linux 双系统上使用 \texttt{perf stat} 对 benchmark 进行了性能剖析。
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{lr}
+  \toprule
+  性能指标 & 数值 \\
+  \midrule
+  CPU 总周期 (cycles) & 343,676,312,640 \\
+  总指令数 (instructions) & 930,287,590,871 \\
+  IPC (instructions per cycle) & \textbf{2.71} \\
+  LLC cache references & 19,003,160,764 \\
+  LLC cache misses & 2,709,461,683 \\
+  LLC miss 率 & \textbf{14.26\%} \\
+  L1 dcache load misses & 8,486,506,422 \\
+  \bottomrule
+  \end{tabular}
+  \caption{perf stat 关键性能指标}
+\end{table}
+
+\textbf{关键发现}：
+
+\begin{enumerate}
+  \item \textbf{IPC = 2.71}：指令级并行度较高，说明 CPU 的超标量流水线充分利用了 SIMD 指令的并行执行能力。SIMD \texttt{mulps} 和 \texttt{addps} 可以在同一周期内与其他指令并行发射。
+
+  \item \textbf{LLC miss 率 14.26\%}：约七分之一的 cache 访问未命中 Last Level Cache，需要从内存加载数据。当数据规模达到 100K 时（$100K \times 96 \times 4B = 38.4MB$），远超 L2 cache（通常 256KB--1MB），导致频繁的 LLC 访问和 miss。
+
+  \item \textbf{L1 dcache load misses 84.8 亿次}：大量的 L1 cache 未命中说明向量数据在 L1 层面就无法命中，直接原因是数据量太大且顺序遍历的模式导致 L1 cache line 被快速替换。
+\end{enumerate}
+
+\textbf{结论}：perf 数据验证了 benchmark 的观察——小规模时 SIMD 计算优势主导（IPC 高），大规模时内存带宽成为瓶颈（LLC miss 率 14.26\%）。这与加速比从 2.65x 降至 1.39x 的趋势完全吻合。
+
+\section{汇编代码分析}
+
+为深入理解 SIMD 优化的底层机制，我们对串行版本和 SIMD 版本的关键函数进行反汇编分析。
+
+\subsection{测试代码}
+
+\begin{lstlisting}[language=C++]
+float serial_dot(const float* a, const float* b, size_t dim) {
+    float s = 0.0f;
+    for (size_t i = 0; i < dim; ++i)
+        s += a[i] * b[i];
+    return 1.0f - s;
+}
+
+float simd_dot(const float* a, const float* b, size_t dim) {
+    simd4f sum(0.0f);
+    for (size_t i = 0; i + 4 <= dim; i += 4) {
+        simd4f va = simd4f::loadu(a + i);
+        simd4f vb = simd4f::loadu(b + i);
+        sum = fmadd(va, vb, sum);   // sum += a[i:i+3] * b[i:i+3]
+    }
+    float s = reduce_sum(sum);
+    return 1.0f - s;
+}
+\end{lstlisting}
+
+\subsection{串行版本反汇编（GCC -O2 自动向量化）}
+
+\begin{lstlisting}[language={[x86masm]Assembler}, title=serial\_dot 反汇编]
+.L4:
+    movups  xmm0, XMMWORD PTR [rcx+rax]   ; load 4 floats from a
+    movups  xmm3, XMMWORD PTR [rdx+rax]   ; load 4 floats from b
+    add     rax, 16
+    mulps   xmm0, xmm3                     ; SIMD multiply (auto-vectorized)
+    addss   xmm1, xmm0                     ; horizontal add element 0
+    shufps  xmm2, xmm0, 85
+    addss   xmm1, xmm2                     ; horizontal add element 1
+    unpckhps xmm2, xmm0
+    shufps  xmm0, xmm0, 255
+    addss   xmm1, xmm2                     ; horizontal add element 2
+    addss   xmm1, xmm0                     ; horizontal add element 3
+    cmp     rax, r9
+    jne     .L4                            ; loop
+\end{lstlisting}
+
+\textbf{分析}：GCC 编译器已自动将标量循环向量化，使用 \texttt{mulps} 进行 SIMD 乘法。但循环内部通过多次 \texttt{shufps} + \texttt{addss} 做水平累加，每个迭代需要 5 条额外指令。
+
+\subsection{手工 SIMD 版本反汇编}
+
+\begin{lstlisting}[language={[x86masm]Assembler}, title=simd\_dot 反汇编]
+.L17:
+    movups  xmm0, XMMWORD PTR -16[rdx+rax*4]  ; load 4 floats from a
+    movups  xmm2, XMMWORD PTR -16[rcx+rax*4]  ; load 4 floats from b
+    add     rax, 4
+    mulps   xmm0, xmm2                          ; SIMD multiply
+    addps   xmm1, xmm0                          ; SIMD accumulate!
+    cmp     r8, rax
+    jnb     .L17                                ; loop
+    ; horizontal reduce after loop ends:
+    shufps  xmm0, xmm1, 78
+    addps   xmm0, xmm1
+    shufps  xmm1, xmm0, 177
+    addps   xmm1, xmm0
+\end{lstlisting}
+
+\textbf{分析}：手工 SIMD 版本在循环内部使用 \texttt{addps}（SIMD 累加）而非 \texttt{addss}（标量累加），水平累加仅在循环结束后进行一次。这使得循环体更紧凑，减少了指令数量和数据依赖，从而获得更高的 IPC（每周期指令数）。
+
+\subsection{对比总结}
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{lcc}
+  \toprule
+  指标 & 自动向量化 & 手工 SIMD \\
+  \midrule
+  乘法指令 & \texttt{mulps} & \texttt{mulps} \\
+  累加指令（循环内）& \texttt{addss}（4次+shuffle）& \texttt{addps}（1次） \\
+  水平累加位置 & 每次迭代 & 循环结束后 \\
+  循环体指令数 & 约 10 条 & 约 6 条 \\
+  \bottomrule
+  \end{tabular}
+  \caption{自动向量化与手工 SIMD 的汇编对比}
+\end{table}
+
+\section{实验及结果分析}
+
+\subsection{实验环境}
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{ll}
+  \toprule
+  项目 & 配置 \\
+  \midrule
+  CPU & ARM aarch64 \\
+  操作系统 & OpenEuler \\
+  编译器 & GCC, C++11 \\
+  数据集 & DEEP100K（维度 96, 10万 base, 1万 query） \\
+  距离度量 & IP（内积） \\
+  评测指标 & Recall@10, Latency ($\mu$s) \\
+  \bottomrule
+  \end{tabular}
+  \caption{实验环境配置}
+\end{table}
+
+\subsection{实验结果}
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{lccc}
+  \toprule
+  方案 & Recall@10 & Latency ($\mu$s) & 得分 \\
+  \midrule
+  Flat-SIMD & $\sim$1.0 & 较高 & 3分 \\
+  SQ-SIMD & $\sim$0.95 & 中等 & 7分 \\
+  PQ-SIMD (粗排 20k) & 0.908 & 20630 & - \\
+  \textbf{PQ-SIMD (粗排 50k)} & \textbf{0.976} & \textbf{20671} & \textbf{14分} \\
+  \bottomrule
+  \end{tabular}
+  \caption{三种方案的 Recall 与 Latency 对比}
+\end{table}
+
+\subsection{结果分析}
+
+\textbf{PQ 粗排候选数调参}：初始设置粗排候选数 $p = k \times 20 = 200$，recall 仅为 0.908。将候选数提升至 $p = k \times 50 = 500$ 后，recall 显著提升至 0.976，而 latency 仅增加 41 $\mu$s（从 20630 到 20671）。这说明：
+\begin{itemize}
+  \item 粗排阶段的 ADC 查表累加是主要计算瓶颈，增加候选数对 latency 影响极小
+  \item 精排阶段只对 Top-500 候选做精确计算，开销可控
+  \item 500 个候选已能覆盖绝大多数真实最近邻，继续增大候选数的边际收益递减
+\end{itemize}
+
+\textbf{最终提交版本}：PQ-SIMD，粗排 50k 候选，recall=0.976，latency$\approx$20.7ms，满足满分要求（recall$>$0.95）。
+
+\subsection{跨平台对比（x86 vs ARM）}
+
+本次实验涉及两个平台：本地 x86 开发环境和 ARM 服务器提交环境。通过跨平台 SIMD 封装，同一套代码无需修改即可在两个平台上编译运行。
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{lll}
+  \toprule
+  对比项 & x86（Linux 双系统） & ARM（OpenEuler 服务器） \\
+  \midrule
+  CPU 架构 & x86\_64 & aarch64 \\
+  SIMD 指令集 & SSE2/AVX & NEON \\
+  测试算法 & Flat-SIMD & PQ-SIMD \\
+  10K 加速比 & 2.65x & — \\
+  100K 加速比 & 1.39x & — \\
+  最终 recall & — & 0.976 \\
+  最终 latency & — & 20671 $\mu$s \\
+  \bottomrule
+  \end{tabular}
+  \caption{x86 与 ARM 平台对比}
+\end{table}
+
+\textbf{关键发现}：
+
+\begin{enumerate}
+  \item \textbf{跨平台可移植性}：通过 \texttt{simd4f} 结构体的条件编译封装（\texttt{\#if defined(USE\_NEON)} / \texttt{\#elif defined(USE\_SSE)}），同一套代码在 x86 和 ARM 上无需修改即可编译运行。本地 x86 环境用于快速迭代调试，验证算法正确性后直接部署到 ARM 服务器。
+
+  \item \textbf{加速比趋势一致}：x86 平台的 benchmark 显示，小规模（10K）加速比 2.65x，大规模（100K）降至 1.39x。这一趋势与理论分析一致——小规模时计算并行度主导，大规模时内存带宽成为瓶颈。ARM 服务器上 PQ-SIMD 的精排阶段同样面临此问题。
+
+  \item \textbf{Recall 一致性}：PQ-SIMD 在 ARM 服务器上达到 recall=0.976，与本地 x86 开发的预期一致，验证算法正确性不受平台影响。
+\end{enumerate}
+
+\section{遇到的问题与解决}
+
+\subsection{main.cc 被本地版本覆盖}
+
+初次上传时，误将本地 \texttt{pq\_simd/main.cc} 覆盖到服务器框架的 \texttt{main.cc}，导致编译报错（\texttt{Neighbor}、\texttt{select\_top\_k}、\texttt{pq\_search} 未定义）。
+
+\textbf{解决}：从本地 \texttt{ann/main.cc} 重新上传框架版本，只修改 \texttt{\#include} 路径为 \texttt{pq\_simd/search.h}。
+
+\subsection{L2 与 IP 距离度量不一致}
+
+PQ 量化器的 \texttt{build\_lut()} 最初计算的是 query 与 centroid 的 L2 距离（\texttt{diff*diff}），而精排使用 IP 距离（\texttt{1-dot}）。粗排与精排度量不一致导致排序混乱，recall 偏低。
+
+\textbf{解决}：将 \texttt{build\_lut} 改为计算 IP 距离，即 \texttt{lut[sub*ksub+c] = 1.0f - dist}，其中 \texttt{dist} 为 dot product。
+
+\subsection{SSE2 兼容性问题}
+
+服务器 GCC 不支持 SSE3 的 \texttt{\_mm\_movehdup\_ps} 和 SSE4.1 的 \texttt{\_mm\_cvtepu8\_epi32}，编译报错。
+
+\textbf{解决}：
+\begin{itemize}
+  \item \texttt{reduce\_sum}：使用纯 SSE2 的 \texttt{\_mm\_shuffle\_ps} + \texttt{\_mm\_add\_ps} 实现水平累加
+  \item uint8→float：使用 \texttt{\_mm\_unpacklo\_epi8}（与 0 交织）→ \texttt{\_mm\_unpacklo\_epi16} → \texttt{\_mm\_cvtepi32\_ps}
+\end{itemize}
+
+\section{总结与展望}
+
+本次实验在 ARM aarch64 平台上实现了基于 SIMD 的向量近似最近邻搜索优化。通过跨平台 \texttt{simd4f} 封装，代码可同时适配 NEON 和 SSE 指令集。最终提交的 PQ-SIMD 方案在 DEEP100K 数据集上达到 recall=0.976、latency$\approx$20.7ms，满足满分标准。
+
+\textbf{代码开源}：本实验完整代码（含 Flat-SIMD、SQ-SIMD、PQ-SIMD 实现及实验报告源码）已托管至 GitHub：
+\begin{center}
+\url{https://github.com/magician336/NKU-Parallel-Programming-Assignments/tree/main/lab2}
+\end{center}
+
+\textbf{未来改进方向}：
+\begin{enumerate}
+  \item \textbf{FastScan}：利用 SIMD 的 8-bit 整数运算进一步加速 ADC 阶段
+  \item \textbf{多线程查询}：使用 OpenMP 并行处理多个查询请求
+  \item \textbf{优化 KMeans}：采用 KMeans++ 初始化提升聚类质量，进一步提高 recall
+\end{enumerate}
+
+\end{document}

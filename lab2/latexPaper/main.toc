@@ -1,0 +1,41 @@
+\babel@toc {UKenglish}{}\relax 
+\contentsline {section}{\numberline {1}问题描述}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}研究背景}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}实验目标}{3}{subsection.1.2}%
+\contentsline {section}{\numberline {2}SIMD 算法设计与实现}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}跨平台 SIMD 封装}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Flat-SIMD}{4}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}算法原理}{4}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}复杂度分析}{4}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}核心代码}{4}{subsubsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.3}SQ-SIMD}{4}{subsection.2.3}%
+\contentsline {subsubsection}{\numberline {2.3.1}算法原理}{4}{subsubsection.2.3.1}%
+\contentsline {subsubsection}{\numberline {2.3.2}复杂度分析}{5}{subsubsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.4}PQ-SIMD}{5}{subsection.2.4}%
+\contentsline {subsubsection}{\numberline {2.4.1}算法原理}{5}{subsubsection.2.4.1}%
+\contentsline {subsubsection}{\numberline {2.4.2}复杂度分析}{5}{subsubsection.2.4.2}%
+\contentsline {subsubsection}{\numberline {2.4.3}核心代码}{5}{subsubsection.2.4.3}%
+\contentsline {subsection}{\numberline {2.5}关键技术点}{6}{subsection.2.5}%
+\contentsline {subsubsection}{\numberline {2.5.1}IP 距离适配}{6}{subsubsection.2.5.1}%
+\contentsline {subsubsection}{\numberline {2.5.2}静态缓存机制}{6}{subsubsection.2.5.2}%
+\contentsline {subsubsection}{\numberline {2.5.3}SSE2 兼容性}{6}{subsubsection.2.5.3}%
+\contentsline {section}{\numberline {3}性能评测}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}测试方法}{7}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}串行 vs SIMD 对比}{7}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}结果分析}{7}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}perf 性能剖析}{7}{subsection.3.4}%
+\contentsline {section}{\numberline {4}汇编代码分析}{8}{section.4}%
+\contentsline {subsection}{\numberline {4.1}测试代码}{8}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}串行版本反汇编（GCC -O2 自动向量化）}{8}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}手工 SIMD 版本反汇编}{9}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}对比总结}{9}{subsection.4.4}%
+\contentsline {section}{\numberline {5}实验及结果分析}{10}{section.5}%
+\contentsline {subsection}{\numberline {5.1}实验环境}{10}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}实验结果}{10}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}结果分析}{10}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}跨平台对比（x86 vs ARM）}{10}{subsection.5.4}%
+\contentsline {section}{\numberline {6}遇到的问题与解决}{11}{section.6}%
+\contentsline {subsection}{\numberline {6.1}main.cc 被本地版本覆盖}{11}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}L2 与 IP 距离度量不一致}{11}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}SSE2 兼容性问题}{11}{subsection.6.3}%
+\contentsline {section}{\numberline {7}总结与展望}{11}{section.7}%
