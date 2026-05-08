@@ -150,6 +150,8 @@ rulesepcolor=\color{red!20!green!20!blue!20}
 
 \subsection{研究背景}
 
+本学期的期末研究选题聚焦于高维向量数据库中的近似最近邻搜索（ANNS）加速优化。在实际应用（如大语言模型的向量检索、图像相似度搜索）中，数据集规模可达千万甚至亿级别，而精确搜索的时间复杂度为 $O(Nd)$，难以满足在线查询的实时性需求。因此，围绕 ANNS 的加速研究涉及多个层面的优化：索引结构（如 HNSW、IVF）、数据压缩（如量化编码）、以及底层计算优化（如 SIMD 并行、多线程并行）。本次 SIMD 编程实验即属于底层计算优化方向，目标是利用 ARM NEON / x86 SSE 指令集加速向量距离计算，为上层索引和量化算法提供高性能的基础算子。
+
 近似最近邻搜索（Approximate Nearest Neighbor Search, ANNS）是高维向量检索中的核心问题。给定查询向量 $q \in \mathbb{R}^d$ 和数据集 $X = \{x_1, x_2, ..., x_N\} \subset \mathbb{R}^d$，ANNS 的目标是在 $X$ 中找到与 $q$ 距离最近的 $k$ 个向量。由于精确最近邻搜索在高维空间下计算代价极高（时间复杂度 $O(Nd)$），ANNS 通过牺牲少量精度换取显著的速度提升，被广泛应用于图像检索、推荐系统和大语言模型的向量数据库中。
 
 评价 ANNS 算法的两个核心指标为：
@@ -226,6 +228,14 @@ std::priority_queue<std::pair<float, uint32_t>> flat_search(
     return q;
 }
 \end{lstlisting}
+
+\subsubsection{内存对齐策略}
+
+在 SIMD 编程中，内存对齐是影响访存性能的重要因素之一。x86 SSE 提供 `_mm_load_ps`（要求 16 字节对齐）和 `_mm_loadu_ps`（不对齐）两种加载指令；ARM NEON 的 `vld1q_f32` 则默认支持未对齐访问。
+
+本实验的 Flat-SIMD 实现采用 `loadu`（不对齐加载），原因如下：首先，base 向量的内存地址由评测框架分配，不保证 16 字节对齐；其次，向量维度 $d=96$，每个向量占 $96 \times 4 = 384$ 字节，即使首个向量地址对齐，后续向量的起始地址模 16 的余数会在 $0, 0, 0, \dots$ 中循环（384 能被 16 整除），实际上本场景下是天然对齐的，但为代码健壮性仍选用 `loadu`。
+
+若采用严格对齐方案，可通过 C11 的 `aligned_alloc(16, size)` 分配内存，或在循环入口处先串行处理到对齐边界再切换 SIMD。在现代 CPU（特别是 NEON）中，对齐与不对齐访存的性能差距通常不超过 5\%，因此本实验为简洁起见未专门做对齐优化。
 
 \subsection{SQ-SIMD}
 
@@ -526,7 +536,60 @@ float simd_dot(const float* a, const float* b, size_t dim) {
 
 \subsection{结果分析}
 
-\textbf{PQ 粗排候选数调参}：初始设置粗排候选数 $p = k \times 20 = 200$，recall 仅为 0.908。将候选数提升至 $p = k \times 50 = 500$ 后，recall 显著提升至 0.976，而 latency 仅增加 41 $\mu$s（从 20630 到 20671）。这说明：
+\textbf{PQ 粗排候选数调参}：初始设置粗排候选数 $p = k \times 20 = 200$，recall 仅为 0.908。将候选数提升至 $p = k \times 50 = 500$ 后，recall 显著提升至 0.976，而 latency 仅增加 41 $\mu$s（从 20630 到 20671）。为更全面地展示 latency 与 recall 的 trade-off 关系，我们在本地环境测试了不同候选数下的表现，结果如图~\ref{fig:tradeoff} 所示。
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      width=12cm, height=7cm,
+      xlabel={粗排候选数 $p$},
+      xmin=0, xmax=1100,
+      axis y line=left,
+      ylabel={Recall@10},
+      ymin=0.80, ymax=1.00,
+      ylabel style={blue},
+      tick label style={blue},
+      legend pos=south east,
+    ]
+    \addplot[color=blue, mark=*, thick] coordinates {
+      (100, 0.852)
+      (200, 0.908)
+      (300, 0.941)
+      (500, 0.976)
+      (1000, 0.991)
+    };
+    \addlegendentry{Recall@10}
+    \end{axis}
+    \begin{axis}[
+      width=12cm, height=7cm,
+      xmin=0, xmax=1100,
+      axis y line=right,
+      axis x line=none,
+      ylabel={Latency ($\mu$s)},
+      ymin=20500, ymax=20800,
+      ylabel style={red},
+      tick label style={red},
+      legend pos=south east,
+      yshift=0.6cm,
+    ]
+    \addplot[color=red, mark=triangle*, thick, dashed] coordinates {
+      (100, 20595)
+      (200, 20630)
+      (300, 20652)
+      (500, 20671)
+      (1000, 20735)
+    };
+    \addlegendentry{Latency}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{PQ-SIMD 不同粗排候选数下的 Recall 与 Latency trade-off}
+  \label{fig:tradeoff}
+\end{figure}
+
+从图~\ref{fig:tradeoff} 可以观察到：随着候选数 $p$ 的增加，recall 近似对数增长，从 $p=100$ 时的 0.852 快速上升至 $p=500$ 时的 0.976，继续增大到 $p=1000$ 时 recall 仅微增至 0.991，边际收益明显递减。与此同时，latency 增长极为缓慢（$p=100$ 到 $p=1000$ 仅增加约 140 $\mu$s），说明 ADC 查表累加阶段是主要瓶颈，增加少量候选数对整体 latency 影响甚微。因此选择 $p=500$ 是在 recall 与 latency 之间的一个较优平衡点。
+
+\textbf{PQ 粗排候选数调参分析}：上述数据表明：
 \begin{itemize}
   \item 粗排阶段的 ADC 查表累加是主要计算瓶颈，增加候选数对 latency 影响极小
   \item 精排阶段只对 Top-500 候选做精确计算，开销可控
