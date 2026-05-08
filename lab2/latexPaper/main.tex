@@ -145,7 +145,7 @@ rulesepcolor=\color{red!20!green!20!blue!20}
 \makeatletter
 \newcommand{\totalpages}{\@abspage@last}
 \makeatother
-\cfoot{\thepage\ of \totalpages}%当前页 of 总页数
+\cfoot{\number\numexpr\value{page}+1\relax\ of \totalpages}%当前页 of 总页数
 
 
 % 生成目录
