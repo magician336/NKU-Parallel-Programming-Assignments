@@ -142,7 +142,10 @@ rulesepcolor=\color{red!20!green!20!blue!20}
 \renewcommand {\thefigure}{\thesection{}.\arabic{figure}}%图片按章标号
 \renewcommand{\figurename}{图}
 \renewcommand{\contentsname}{目录}  
-\cfoot{\thepage\ of \pageref{LastPage}}%当前页 of 总页数
+\makeatletter
+\newcommand{\totalpages}{\@abspage@last}
+\makeatother
+\cfoot{\thepage\ of \totalpages}%当前页 of 总页数
 
 
 % 生成目录
