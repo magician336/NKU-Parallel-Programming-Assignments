@@ -18,6 +18,10 @@ escapeinside=``
 \usepackage{graphicx}
 \usepackage{color,framed}%文本框
 \usepackage{listings}
+\urlstyle{tt}
+\makeatletter
+\g@addto@macro{\UrlBreaks}{\do\_}
+\makeatother
 \usepackage{caption}
 \usepackage{amssymb}
 \usepackage{enumerate}
@@ -101,6 +105,7 @@ rulesepcolor=\color{red!20!green!20!blue!20}
 \setlength{\textfloatsep}{10mm}%设置图片的前后间距
 %--------------------文档内容--------------------
 
+\sloppy
 \begin{document}
 \renewcommand{\contentsname}{目\ 录}
 \renewcommand{\appendixname}{附录}
@@ -235,9 +240,9 @@ std::priority_queue<std::pair<float, uint32_t>> flat_search(
 
 本实验的 Flat-SIMD 实现采用 `loadu`（不对齐加载），原因如下：首先，base 向量的内存地址由评测框架分配，不保证 16 字节对齐；其次，向量维度 $d=96$，每个向量占 $96 \times 4 = 384$ 字节，即使首个向量地址对齐，后续向量的起始地址模 16 的余数会在 $0, 0, 0, \dots$ 中循环（384 能被 16 整除），实际上本场景下是天然对齐的，但为代码健壮性仍选用 `loadu`。
 
-若采用严格对齐方案，可通过 C11 的 `aligned_alloc(16, size)` 分配内存，或在循环入口处先串行处理到对齐边界再切换 SIMD。在现代 CPU（特别是 NEON）中，对齐与不对齐访存的性能差距通常不超过 5\%，因此本实验为简洁起见未专门做对齐优化。
+若采用严格对齐方案，可通过 C11 的 \url{aligned_alloc(16, size)} 分配内存，或在循环入口处先串行处理到对齐边界再切换 SIMD。在现代 CPU（特别是 NEON）中，对齐与不对齐访存的性能差距通常不超过 5\%，因此本实验为简洁起见未专门做对齐优化。
 
-\textbf{循环展开}：当前 `inner_product_simd` 的内层循环步长为 4（一次处理 4 个 float），每次迭代都需执行循环控制指令（`cmp` + `jne`）。若做 2x 循环展开（步长 8），可将循环次数减半，减少分支指令开销，同时让 CPU 的超标量流水线有更多机会并行发射多条独立的 SIMD 指令。但展开会增加寄存器压力（需同时维护 2 个累加器），在 x86 SSE（仅 16 个 XMM 寄存器）上需谨慎权衡。本实验未做循环展开，留待后续优化。
+\textbf{循环展开}：当前 \url{inner_product_simd} 的内层循环步长为 4（一次处理 4 个 float），每次迭代都需执行循环控制指令（`cmp` + `jne`）。若做 2x 循环展开（步长 8），可将循环次数减半，减少分支指令开销，同时让 CPU 的超标量流水线有更多机会并行发射多条独立的 SIMD 指令。但展开会增加寄存器压力（需同时维护 2 个累加器），在 x86 SSE（仅 16 个 XMM 寄存器）上需谨慎权衡。本实验未做循环展开，留待后续优化。
 
 \subsection{SQ-SIMD}
 
@@ -720,7 +725,7 @@ PQ 量化器的 \texttt{build\_lut()} 最初计算的是 query 与 centroid 的 
 
 \textbf{A1}：这个错误是因为服务器上的 GCC 编译器仅支持 SSE2 指令集，而 `_mm_movehdup_ps` 是 SSE3 引入的指令。你在本地开发环境可能使用了较新的 GCC 版本或者启用了更高版本的指令集支持（如 `-msse3` 或 `-march=native`），但服务器编译环境较为严格。
 
-针对 `reduce_sum` 的水平累加，可以用纯 SSE2 的 `_mm_shuffle_ps` 配合 `_mm_add_ps` 来替代：先用 `_mm_shuffle_ps(a, a, _MM_SHUFFLE(1,0,3,2))` 交换高低位，再做向量加法，重复两次即可完成四个 float 的水平求和。对于 uint8 到 float 的转换，SSE4.1 的 `_mm_cvtepu8_epi32` 也需要替换为 SSE2 的 unpack 指令链：`_mm_unpacklo_epi8`（与零交织）→ `_mm_unpacklo_epi16` → `_mm_cvtepi32_ps`。这样修改后，代码即可在只支持 SSE2 的服务器上顺利编译。
+针对 \url{reduce_sum} 的水平累加，可以用纯 SSE2 的 \url{_mm_shuffle_ps} 配合 \url{_mm_add_ps} 来替代：先用 \url{_mm_shuffle_ps(a, a, _MM_SHUFFLE(1,0,3,2))} 交换高低位，再做向量加法，重复两次即可完成四个 float 的水平求和。对于 uint8 到 float 的转换，SSE4.1 的 \url{_mm_cvtepu8_epi32} 也需要替换为 SSE2 的 unpack 指令链：\url{_mm_unpacklo_epi8}（与零交织）→ \url{_mm_unpacklo_epi16} → \url{_mm_cvtepi32_ps}。这样修改后，代码即可在只支持 SSE2 的服务器上顺利编译。
 
 \textbf{Q2}：我的 PQ-SIMD 实现跑通了，但是 recall 只有 0.65 左右，和预期差距很大。粗排候选数已经从 200 加到了 500，recall 提升也不明显，可能是什么问题？
 
