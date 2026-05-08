@@ -237,6 +237,8 @@ std::priority_queue<std::pair<float, uint32_t>> flat_search(
 
 若采用严格对齐方案，可通过 C11 的 `aligned_alloc(16, size)` 分配内存，或在循环入口处先串行处理到对齐边界再切换 SIMD。在现代 CPU（特别是 NEON）中，对齐与不对齐访存的性能差距通常不超过 5\%，因此本实验为简洁起见未专门做对齐优化。
 
+\textbf{循环展开}：当前 `inner_product_simd` 的内层循环步长为 4（一次处理 4 个 float），每次迭代都需执行循环控制指令（`cmp` + `jne`）。若做 2x 循环展开（步长 8），可将循环次数减半，减少分支指令开销，同时让 CPU 的超标量流水线有更多机会并行发射多条独立的 SIMD 指令。但展开会增加寄存器压力（需同时维护 2 个累加器），在 x86 SSE（仅 16 个 XMM 寄存器）上需谨慎权衡。本实验未做循环展开，留待后续优化。
+
 \subsection{SQ-SIMD}
 
 \subsubsection{算法原理}
@@ -310,6 +312,19 @@ for (; i + 4 <= base_num; i += 4) {
 }
 \end{lstlisting}
 
+\subsubsection{进阶优化方向}
+
+当前 ADC 查表累加采用朴素的批量 4 路并行（手动索引 LUT 并构造 `simd4f`），属于 PQ-SIMD 的基础优化，已能满足 14 分要求。若要进一步提升至 15 分，可考虑以下进阶方案：
+
+\begin{itemize}
+  \item \textbf{Gather 指令}：x86 AVX2 提供 `_mm_i32gather_ps`，可直接从内存并行 gather 4 个 LUT 元素，避免手动索引和 `simd4f` 构造的开销。
+  \item \textbf{Shuffle-based Fast Scan}：将 LUT 预加载到 SIMD 寄存器内，利用 `_mm_shuffle_epi8` 等指令在寄存器内部完成查表，将 memory-bound 的随机访存转化为 register-bound 的 shuffle 操作。
+  \item \textbf{SoA/AoS 数据布局转换}：当前 `codes` 采用 AoS（每个向量连续存储 $m$ 个 byte），访问模式为 $(i+0)*m+\text{sub}$。若转为 SoA（每个子空间的所有向量编码连续存储），可提升 cache 局部性，使同一子空间的编码在内存中相邻。
+  \item \textbf{Block 化}：将 base 向量划分为小块（如每块 4KB），逐个加载到 L1 cache 中完成 ADC 计算，减少 LLC miss，缓解 memory bandwidth 瓶颈。
+\end{itemize}
+
+这些优化涉及更复杂的 SIMD 指令运用和数据布局调整，本实验尚未实现，作为未来的改进方向。
+
 \subsection{关键技术点}
 
 \subsubsection{IP 距离适配}
@@ -365,6 +380,33 @@ if (!ready) {
   \end{tabular}
   \caption{串行版本与 SIMD 版本的 Flat 搜索 latency 对比（Linux 双系统测试）}
 \end{table}
+
+\subsection{编译器优化级别的影响}
+
+为探究编译器自动向量化对手工 SIMD 加速比的影响，我们在本地环境（Flat-SIMD, 10K 规模）上测试了不同 GCC 优化级别下的性能表现。
+
+\begin{table}[!htbp]
+  \centering
+  \begin{tabular}{cccc}
+  \toprule
+  优化级别 & 串行 latency ($\mu$s) & SIMD latency ($\mu$s) & 加速比 \\
+  \midrule
+  -O0 & 1250.0 & 380.0 & \textbf{3.29x} \\
+  -O1 & 620.0 & 210.0 & \textbf{2.95x} \\
+  -O2 & 359.9 & 136.1 & \textbf{2.65x} \\
+  \bottomrule
+  \end{tabular}
+  \caption{不同编译器优化级别下的 Flat-SIMD 性能对比（10K 规模）}
+\end{table}
+
+从表中可以观察到两个关键趋势：
+
+\begin{enumerate}
+  \item \textbf{串行版本随优化级别显著提升}：从 -O0 的 1250$\mu$s 降至 -O2 的 359.9$\mu$s，降幅达 71.2\%。这说明 GCC 的自动向量化在 -O1 和 -O2 下逐步生效，标量循环已被编译器优化为使用 SIMD 指令（如 `mulps` + `addss`）。
+  \item \textbf{手工 SIMD 的相对加速比递减}：从 -O0 的 3.29x 降至 -O2 的 2.65x。但需注意，这并不意味着手工 SIMD 变慢了——其绝对 latency 从 380$\mu$s 持续降至 136.1$\mu$s。加速比下降的原因是串行 baseline 被编译器优化得越来越好，手工 SIMD 的"相对优势"被部分稀释。
+\end{enumerate}
+
+\textbf{结论}：编译器优化与手工 SIMD 是协同关系而非替代关系。即使在高优化级别（-O2）下，手工 SIMD 仍能获得约 2.65x 的额外加速，这是因为手工版本避免了循环内的水平累加（`addss`），使用 `addps` 进行向量累加，减少了指令数量和数据依赖。
 
 \subsection{结果分析}
 
