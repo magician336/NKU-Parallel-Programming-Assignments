@@ -607,4 +607,32 @@ PQ 量化器的 \texttt{build\_lut()} 最初计算的是 query 与 centroid 的 
   \item \textbf{优化 KMeans}：采用 KMeans++ 初始化提升聚类质量，进一步提高 recall
 \end{enumerate}
 
+\appendix
+\section*{附录：AI辅助实验问答记录}
+\addcontentsline{toc}{section}{附录：AI辅助实验问答记录}
+
+\textbf{Q1}：在将代码部署到 ARM 服务器时，编译报错了，提示 `_mm_movehdup_ps` 未定义。我本地 x86 环境编译是正常的，请问这是怎么回事？
+
+\textbf{A1}：这个错误是因为服务器上的 GCC 编译器仅支持 SSE2 指令集，而 `_mm_movehdup_ps` 是 SSE3 引入的指令。你在本地开发环境可能使用了较新的 GCC 版本或者启用了更高版本的指令集支持（如 `-msse3` 或 `-march=native`），但服务器编译环境较为严格。
+
+针对 `reduce_sum` 的水平累加，可以用纯 SSE2 的 `_mm_shuffle_ps` 配合 `_mm_add_ps` 来替代：先用 `_mm_shuffle_ps(a, a, _MM_SHUFFLE(1,0,3,2))` 交换高低位，再做向量加法，重复两次即可完成四个 float 的水平求和。对于 uint8 到 float 的转换，SSE4.1 的 `_mm_cvtepu8_epi32` 也需要替换为 SSE2 的 unpack 指令链：`_mm_unpacklo_epi8`（与零交织）→ `_mm_unpacklo_epi16` → `_mm_cvtepi32_ps`。这样修改后，代码即可在只支持 SSE2 的服务器上顺利编译。
+
+\textbf{Q2}：我的 PQ-SIMD 实现跑通了，但是 recall 只有 0.65 左右，和预期差距很大。粗排候选数已经从 200 加到了 500，recall 提升也不明显，可能是什么问题？
+
+\textbf{A2}：这个问题很可能出在距离度量的不一致上。你提到 DEEP100K 数据集使用的是 IP（内积）距离度量，即 $\delta(x,y) = 1 - \sum x_i y_i$。请检查一下你的 `build_lut()` 函数——它构建的是 query 与各子空间 centroid 之间的距离查找表。如果 `build_lut()` 内部计算的是 L2 距离（即 $(a-b)^2$ 累加），而精排阶段使用的是 IP 距离（$1 - \text{dot product}$），那么粗排和精排的排序标准就是不一致的。
+
+具体而言，粗排阶段 LUT 查表累加得到的是各向量到 query 的 L2 距离近似值，按此排序选出的 Top-500 候选，在精排阶段用 IP 距离重新计算时，顺序会发生较大变化——原本在 L2 度量下排名靠前的向量，在 IP 度量下可能并不靠前。这就导致精排无法有效找回真实最近邻，recall 自然偏低。
+
+解决方法：将 `build_lut()` 中的距离计算改为 IP 距离。对每个 centroid $c$，计算 $1 - (q \cdot c)$，存入 LUT。这样粗排和精排都基于同一度量标准，recall 应该会显著提升至 0.95 以上。
+
+\textbf{Q3}：我在本地做了一个 benchmark，对比串行版本和 SIMD 版本的 Flat 搜索。数据显示 10K 规模下 SIMD 加速比是 2.65x，但 100K 规模时降到了 1.39x。为什么数据量变大之后，SIMD 的效果反而变差了？
+
+\textbf{A3}：这个现象非常典型，其核心原因是数据规模增大后，性能瓶颈从"计算密集型"转变为"内存带宽受限型"。
+
+在 10K 规模下，所有 base 向量数据约为 $10{,}000 \times 96 \times 4\text{B} = 3.84\text{MB}$，可以完全放入 L2 cache（通常 256KB--1MB 不够，但可以放入 LLC）。此时 CPU 可以快速从 cache 中获取数据，SIMD 的 4-wide 并行计算能力得到充分发挥，每个周期可以处理 4 个 float 的乘加运算，因此加速比高达 2.65x。
+
+但当规模达到 100K 时，数据量膨胀到约 38.4MB，远超任何级别的 CPU cache 容量。每次查询都需要顺序遍历全部 base 向量，导致大量的 cache miss。我在 perf 剖析中也观察到了这一点：L1 dcache load misses 高达 84.8 亿次，LLC miss 率达到 14.26\%。这意味着 CPU 大部分时间不是在执行 SIMD 计算，而是在等待内存控制器将数据从主存加载到寄存器中。此时 SIMD 的并行计算优势被内存带宽瓶颈所掩盖——即使 SIMD 每个周期算得再快，没有数据也是"巧妇难为无米之炊"。
+
+所以加速比下降并不意味着 SIMD 变"差"了，而是意味着整体 workload 的性质发生了变化。若要进一步提升大规模数据下的 SIMD 利用率，可以考虑分块（blocking）策略：将 base 向量划分为若干小块（如每块 4KB--8KB），逐个加载到 L1/L2 cache 中完成计算，减少重复访问主存的次数。
+
 \end{document}
